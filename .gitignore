@@ -1,0 +1,12 @@
+# secrets — never commit
+config.json
+devices.json
+snapshot.json
+
+# python
+.venv/
+__pycache__/
+*.egg-info/
+dist/
+build/
+.pytest_cache/

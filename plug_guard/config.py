@@ -1,0 +1,43 @@
+"""Configuration: JSON file at ~/.config/plug-guard/config.json (see README)."""
+
+from __future__ import annotations
+
+import json
+import os
+from dataclasses import dataclass
+from pathlib import Path
+
+CONFIG_DIR = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "plug-guard"
+CONFIG_PATH = CONFIG_DIR / "config.json"
+
+
+@dataclass
+class Config:
+    device_id: str = ""
+    local_key: str = ""
+    ip: str = ""
+    version: str = "3.3"
+    turn_on_below: int = 20
+    turn_off_above: int = 90
+    poll_interval: int = 60  # seconds
+    dry_run: bool = False
+
+    @classmethod
+    def load(cls, path: Path = CONFIG_PATH) -> "Config":
+        cfg = cls()
+        if path.is_file():
+            data = json.loads(path.read_text())
+            for key, value in data.items():
+                if hasattr(cfg, key):
+                    setattr(cfg, key, value)
+        # Env overrides beat file (useful for CI / one-off runs)
+        cfg.device_id = os.environ.get("PLUGGUARD_DEVICE_ID", cfg.device_id)
+        cfg.local_key = os.environ.get("PLUGGUARD_LOCAL_KEY", cfg.local_key)
+        cfg.ip = os.environ.get("PLUGGUARD_IP", cfg.ip)
+        cfg.dry_run = cfg.dry_run or os.environ.get("PLUGGUARD_DRY_RUN") == "1"
+        if not cfg.dry_run and not (cfg.device_id and cfg.local_key and cfg.ip):
+            raise SystemExit(
+                f"Missing plug config. Fill in {path} (device_id, local_key, ip) — "
+                "run `python -m tinytuya wizard` to obtain credentials, or set PLUGGUARD_DRY_RUN=1."
+            )
+        return cfg

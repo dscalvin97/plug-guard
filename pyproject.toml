@@ -1,0 +1,30 @@
+[project]
+name = "plug-guard"
+version = "0.1.0"
+description = "Turn a Tuya-based smart plug (e.g. Wipro 10A) on/off based on laptop battery state"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+    "tinytuya>=1.20.0",
+    "pystray>=0.19.0",
+    "pillow>=10.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[project.scripts]
+plug-guard = "plug_guard.__main__:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["plug_guard*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
