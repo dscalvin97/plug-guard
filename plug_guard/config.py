@@ -15,7 +15,8 @@ CONFIG_PATH = CONFIG_DIR / "config.json"
 class Config:
     device_id: str = ""
     local_key: str = ""
-    ip: str = ""
+    mac: str = ""  # preferred: plug is found by MAC, survives DHCP changes
+    ip: str = ""  # optional last-known hint, speeds up discovery
     version: str = "3.3"
     turn_on_below: int = 20
     turn_off_above: int = 90
@@ -33,11 +34,13 @@ class Config:
         # Env overrides beat file (useful for CI / one-off runs)
         cfg.device_id = os.environ.get("PLUGGUARD_DEVICE_ID", cfg.device_id)
         cfg.local_key = os.environ.get("PLUGGUARD_LOCAL_KEY", cfg.local_key)
+        cfg.mac = os.environ.get("PLUGGUARD_MAC", cfg.mac)
         cfg.ip = os.environ.get("PLUGGUARD_IP", cfg.ip)
         cfg.dry_run = cfg.dry_run or os.environ.get("PLUGGUARD_DRY_RUN") == "1"
-        if not cfg.dry_run and not (cfg.device_id and cfg.local_key and cfg.ip):
+        if not cfg.dry_run and not (cfg.device_id and cfg.local_key and (cfg.mac or cfg.ip)):
             raise SystemExit(
-                f"Missing plug config. Fill in {path} (device_id, local_key, ip) — "
-                "run `python -m tinytuya wizard` to obtain credentials, or set PLUGGUARD_DRY_RUN=1."
+                f"Missing plug config. Fill in {path} (device_id, local_key, and mac "
+                "[preferred] or ip) — run `python -m tinytuya wizard` to obtain the "
+                "local_key, or set PLUGGUARD_DRY_RUN=1."
             )
         return cfg

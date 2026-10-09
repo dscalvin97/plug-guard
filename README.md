@@ -29,9 +29,8 @@ local LAN** — no cloud calls at runtime, no hub, works with internet down.
    python -m tinytuya wizard
    ```
 
-   Sign in with the same account as the app; the wizard prints `device_id`,
-   `local_key`, and lets you pick the device IP. Give the plug a **DHCP
-   reservation** on your router so the IP doesn't drift.
+   Sign in with the same account as the app; the wizard prints `device_id` and
+   `local_key`.
 
 3. **Install plug-guard**:
 
@@ -47,12 +46,21 @@ local LAN** — no cloud calls at runtime, no hub, works with internet down.
    {
      "device_id": "bfxxxxxxxxxxxxxxxx",
      "local_key": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-     "ip": "192.168.1.50",
+     "mac": "80:64:7c:89:3d:a0",
+     "ip": "192.168.1.70",
      "turn_on_below": 20,
      "turn_off_above": 90,
      "poll_interval": 60
    }
    ```
+
+   `mac` is how plug-guard finds the plug — **no DHCP reservation needed.**
+   `ip` is only an optional last-known hint to skip the ~5s discovery sweep.
+   If the router hands the plug a new IP, plug-guard re-finds it by MAC
+   automatically (and re-locates again on any command failure).
+
+   Find your plug's MAC from the Wipro app's device info page, or your router's
+   client list (it's `80:64:7c:...` for Tuya modules).
 
    Skip step 2-4 for a hardware-free trial: `PLUGGUARD_DRY_RUN=1`.
 
@@ -87,7 +95,9 @@ systemctl --user enable --now plug-guard
 
 - **Linux native** — sysfs (`/sys/class/power_supply`), primary.
 - **WSL2** — works too: WSL passes the host battery through sysfs. Requires
-  WSL kernel ≥ 5.10 (default on current Windows 11).
+  WSL kernel ≥ 5.10 (default on current Windows 11). Discovery uses an ICMP
+  sweep + Windows ARP table because WSL2's NAT swallows the UDP broadcasts
+  `tinytuya scan` relies on.
 - **Windows native** — via `Win32_Battery` CIM, used automatically if sysfs is
   absent. Run it directly in Windows if you don't use WSL.
 
