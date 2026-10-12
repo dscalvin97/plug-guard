@@ -15,6 +15,8 @@ def main() -> None:
                                      description="Switch a smart plug based on laptop battery state")
     parser.add_argument("-v", "--verbose", action="store_true", help="debug logging")
     parser.add_argument("--dry-run", action="store_true", help="never touch the real plug")
+    parser.add_argument("--no-tray", action="store_true",
+                        help="run headless (no system tray icon; for systemd/WSL)")
     sub = parser.add_subparsers(dest="cmd")
     sub.add_parser("status", help="print battery + config and exit")
     args = parser.parse_args()
@@ -39,7 +41,11 @@ def main() -> None:
 
     from .tray import App
 
-    App(cfg).run()
+    app = App(cfg)
+    if args.no_tray:
+        app.run_headless()
+    else:
+        app.run()
 
 
 if __name__ == "__main__":

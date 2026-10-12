@@ -5,9 +5,6 @@ from __future__ import annotations
 import logging
 import threading
 
-import pystray
-from PIL import Image, ImageDraw
-
 from .battery import BatteryState, read_battery
 from .config import Config
 from .controller import Controller
@@ -16,8 +13,10 @@ from .plug import PlugDriver, build_driver
 log = logging.getLogger(__name__)
 
 
-def _icon_image(color: str) -> Image.Image:
+def _icon_image(color: str):
     """Draw a simple plug glyph so we ship no binary assets."""
+    from PIL import Image, ImageDraw
+
     img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
     d.rounded_rectangle([18, 26, 46, 58], radius=6, fill=color)
@@ -35,6 +34,13 @@ class App:
         self.plug_on: bool | None = None
         self.paused = False
         self._stop = threading.Event()
+        self.icon = None  # built lazily in run(); headless mode never needs it
+
+    def _build_icon(self):
+        """Construct the pystray icon. Imported here so headless mode never
+        touches Xlib (pystray's Xorg backend connects to the display at import)."""
+        import pystray
+
         self.icon = pystray.Icon(
             "plug-guard",
             icon=_icon_image("gray"),
@@ -109,6 +115,13 @@ class App:
             self.icon.title = self._status_text()
 
     def run(self) -> None:
+        self._build_icon()
         self._tick()  # one synchronous tick before showing the icon
         threading.Thread(target=self._run_loop, daemon=True).start()
         self.icon.run()
+
+    def run_headless(self) -> None:
+        """No tray icon — for systemd/WSL where there's no display to bind to."""
+        log.info("plug-guard headless mode (interval %ds)", self.cfg.poll_interval)
+        while not self._stop.wait(self.cfg.poll_interval):
+            self._tick()
