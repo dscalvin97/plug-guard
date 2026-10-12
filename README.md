@@ -22,15 +22,24 @@ local LAN** — no cloud calls at runtime, no hub, works with internet down.
 
 1. **Pair the plug** with the Wipro Next Smart Home / Smart Life app (once).
 
-2. **Get the Tuya local key** (once):
+2. **Get the Tuya local key** (once, no developer account needed):
 
    ```sh
-   pipx install tinytuya   # or: pip install tinytuya
-   python -m tinytuya wizard
+   git clone https://github.com/vineetchoudhary/tuya-local-key.git
+   cd tuya-local-key && ./setup.sh
+   .venv/bin/python -m pip install -r requirements-web.txt
+   .venv/bin/waitress-serve --listen=127.0.0.1:8765 app:app
    ```
 
-   Sign in with the same account as the app; the wizard prints `device_id` and
-   `local_key`.
+   Open `http://localhost:8765`, enter your Smart Life **user code**
+   (app → Me → Settings → Account and Security → User Code), scan the QR with
+   the Smart Life/Wipro app, confirm login. Your plug's `local_key` is shown
+   with a copy button. Uses Tuya's official device-sharing SDK via Home
+   Assistant's public app registration — **no Tuya IoT developer account,
+   cloud project, or Access ID/Secret required.**
+
+   This tool reports your key in raw latin1, not hex. Local keys are exactly
+   **16 characters** but may contain any latin1 character — do not assume hex.
 
 3. **Install plug-guard**:
 
