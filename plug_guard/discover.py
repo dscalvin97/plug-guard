@@ -9,10 +9,14 @@ from __future__ import annotations
 
 import re
 import subprocess
+import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-_ARP_EXE = Path("/mnt/c/Windows/System32/ARP.EXE")
+_WSL_ARP = Path("/mnt/c/Windows/System32/ARP.EXE")
+# Native Windows (sys.platform win32) vs WSL (linux, but /mnt/c present) vs native Linux.
+_IS_WIN = sys.platform == "win32"
+_IS_WSL = not _IS_WIN and _WSL_ARP.exists()
 
 _IP_RE = re.compile(r"(\d{1,3}(?:\.\d{1,3}){3})")
 
@@ -38,18 +42,21 @@ def find_ip_by_mac(mac: str, arp_text: str) -> str | None:
 
 
 def arp_table() -> str:
-    if _ARP_EXE.exists():  # running under WSL
-        out = subprocess.run([str(_ARP_EXE), "-a"], capture_output=True, text=True)
+    if _IS_WSL:
+        out = subprocess.run([str(_WSL_ARP), "-a"], capture_output=True, text=True)
+        return out.stdout
+    if _IS_WIN:  # native Windows: arp.exe is on PATH
+        out = subprocess.run(["arp", "-a"], capture_output=True, text=True)
         return out.stdout
     out = subprocess.run(["ip", "neigh"], capture_output=True, text=True)
     return out.stdout
 
 
 def _ping(ip: str) -> bool:
+    # Windows ping uses -n (count) and -w (timeout ms); Linux uses -c and -W (s)
+    args = ["ping", "-n", "1", "-w", "1000", ip] if _IS_WIN else ["ping", "-c", "1", "-W", "1", ip]
     try:
-        return subprocess.run(
-            ["ping", "-c", "1", "-W", "1", ip], capture_output=True
-        ).returncode == 0
+        return subprocess.run(args, capture_output=True).returncode == 0
     except OSError:
         return False
 
@@ -61,12 +68,12 @@ def ping_sweep(subnet_prefix: str, workers: int = 64) -> None:
 
 
 def detect_subnet_prefix() -> str | None:
-    """Best-effort LAN subnet detection: Windows ipconfig under WSL,
-    else the native Linux default route's source address."""
-    if _ARP_EXE.exists():
-        out = subprocess.run(
-            [str(_ARP_EXE).replace("ARP.EXE", "ipconfig.exe")], capture_output=True, text=True
-        ).stdout
+    """Best-effort LAN subnet detection. Windows (native or WSL): ipconfig;
+    native Linux: the default route's source address."""
+    if _IS_WIN or _IS_WSL:
+        # under WSL call ipconfig.exe by full path; natively it's on PATH
+        cmd = [str(_WSL_ARP).replace("ARP.EXE", "ipconfig.exe")] if _IS_WSL else ["ipconfig"]
+        out = subprocess.run(cmd, capture_output=True, text=True).stdout
         for m in re.finditer(
             r"IPv4 Address[^\d]*(\d+\.\d+\.\d+\.\d+)[\s\S]{0,120}?Subnet Mask[^\d]*(\d+\.\d+\.\d+\.\d+)",
             out,

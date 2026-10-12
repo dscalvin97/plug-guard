@@ -40,7 +40,8 @@ class Config:
         if not cfg.dry_run and not (cfg.device_id and cfg.local_key and (cfg.mac or cfg.ip)):
             raise SystemExit(
                 f"Missing plug config. Fill in {path} (device_id, local_key, and mac "
-                "[preferred] or ip) — run `python -m tinytuya wizard` to obtain the "
-                "local_key, or set PLUGGUARD_DRY_RUN=1."
+                "[preferred] or ip) — get the local_key via the tuya-local-key QR tool "
+                "(https://github.com/vineetchoudhary/tuya-local-key, no developer account "
+                "needed), or set PLUGGUARD_DRY_RUN=1."
             )
         return cfg
