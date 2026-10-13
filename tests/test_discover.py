@@ -34,5 +34,14 @@ def test_absent_mac_returns_none():
     assert find_ip_by_mac("de:ad:be:ef:00:01", WIN_ARP) is None
 
 
+def test_subnet_filter_drops_stale_other_interface():
+    # regression: a stale ARP entry from another interface (home WiFi) must not
+    # leak through when discovery is pinned to a specific subnet (e.g. hotspot)
+    assert find_ip_by_mac("80:64:7c:89:3d:a0", WIN_ARP, subnet_prefix="192.168.1") == "192.168.1.70"
+    assert find_ip_by_mac("80:64:7c:89:3d:a0", WIN_ARP, subnet_prefix="192.168.137") is None
+    # no subnet given -> no filtering (old behavior)
+    assert find_ip_by_mac("80:64:7c:89:3d:a0", WIN_ARP) == "192.168.1.70"
+
+
 def test_norm_mac():
     assert _norm_mac("80-64-7C-89-3D-A0") == "80:64:7c:89:3d:a0"

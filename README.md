@@ -117,6 +117,7 @@ Create `~/.config/plug-guard/config.json` (on Windows:
 | `local_key` | The 16-char key — copy exactly, symbols allowed. |
 | `mac` | Plug's MAC. **This is how it's found — no DHCP reservation needed.** Tuya modules are `80:64:7c:...`. Get it from the router's client list or your plug's label. |
 | `ip` | Optional last-known hint. Skips the ~5s discovery sweep. Ignored once MAC discovery runs; auto-updates if the plug moves. |
+| `subnet` | Optional. Pins discovery to one `/24`, e.g. `"192.168.137"` (a hotspot) or `"192.168.1"` (home WiFi). Use this when the machine has multiple interfaces — otherwise auto-detection may sweep the wrong network. |
 | `turn_on_below` / `turn_off_above` | Battery thresholds (%). Must satisfy `0 < on < off <= 100`. |
 | `poll_interval` | Seconds between battery reads. |
 
@@ -217,6 +218,34 @@ configuration, and it re-locates automatically if the IP drifts.
   kernel ≥ 5.10, default on current Windows 11).
 - **Windows native** — `Win32_Battery` CIM, used automatically when sysfs is
   absent.
+
+## Running the plug on the controller's own hotspot
+
+You can have the plug join a WiFi hotspot hosted by the machine running
+plug-guard (e.g. Windows Mobile Hotspot) instead of your home router. This keeps
+the plug off your main network.
+
+Requirements:
+
+- **Hotspot must be 2.4GHz.** Tuya plugs cannot see 5GHz networks.
+- **The plug must be paired to the hotspot's SSID.** Re-pairing **rotates the
+  local key** — after re-pairing, re-extract the key (step 2 above) and update
+  `config.json`, or every command will fail with error 904.
+- **Set `subnet`** in `config.json` to the hotspot's subnet so discovery sweeps
+  the right interface (e.g. `"192.168.137"` for the default Windows hotspot).
+- **WSL2 needs mirrored networking.** In default NAT mode, WSL sits behind a
+  virtual switch with **no route** to the Windows hotspot interface — the plug
+  is unreachable even though Windows itself can see it. Add to
+  `C:\Users\<you>\.wslconfig`:
+  ```ini
+  [wsl2]
+  networkingMode=mirrored
+  ```
+  then `wsl --shutdown` and reopen. On native Windows/Linux this doesn't apply.
+
+Note: if the controller *is* the laptop being charged, the automation only runs
+while that laptop is awake. It recovers after reboot (hotspot returns, plug
+rejoins, plug-guard resumes), but it can't act while the laptop is fully dead.
 
 ## Tray menu
 

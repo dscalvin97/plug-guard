@@ -26,17 +26,20 @@ def _norm_mac(mac: str) -> str:
     return mac.strip().lower().replace("-", ":")
 
 
-def find_ip_by_mac(mac: str, arp_text: str) -> str | None:
+def find_ip_by_mac(mac: str, arp_text: str, subnet_prefix: str | None = None) -> str | None:
     """Search an `arp -a` or `ip neigh` dump for the IP owning `mac`.
 
     Both formats put the IPv4 and the MAC (dash- or colon-separated) on the
-    same line, so one regex pass suffices.
+    same line, so one regex pass suffices. If subnet_prefix is given (a.b.c),
+    only IPs inside that /24 are considered — otherwise a stale ARP entry from
+    another interface (e.g. home WiFi vs a hotspot) can leak through and defeat
+    the subnet pin.
     """
     needle = _norm_mac(mac)
     for line in arp_text.splitlines():
         if needle in line.lower().replace("-", ":"):
             m = _IP_RE.search(line)
-            if m:
+            if m and (subnet_prefix is None or m.group(1).startswith(subnet_prefix + ".")):
                 return m.group(1)
     return None
 
@@ -109,4 +112,4 @@ def resolve_ip(mac: str, hint_ip: str | None = None, subnet_prefix: str | None =
     if prefix is None:
         return None
     ping_sweep(prefix)
-    return find_ip_by_mac(mac, arp_table())
+    return find_ip_by_mac(mac, arp_table(), subnet_prefix=prefix)

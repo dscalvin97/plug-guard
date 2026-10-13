@@ -17,6 +17,7 @@ class Config:
     local_key: str = ""
     mac: str = ""  # preferred: plug is found by MAC, survives DHCP changes
     ip: str = ""  # optional last-known hint, speeds up discovery
+    subnet: str = ""  # pin discovery to a subnet, e.g. "192.168.137" (hotspot)
     version: str = "3.3"
     turn_on_below: int = 20
     turn_off_above: int = 90
@@ -36,6 +37,7 @@ class Config:
         cfg.local_key = os.environ.get("PLUGGUARD_LOCAL_KEY", cfg.local_key)
         cfg.mac = os.environ.get("PLUGGUARD_MAC", cfg.mac)
         cfg.ip = os.environ.get("PLUGGUARD_IP", cfg.ip)
+        cfg.subnet = os.environ.get("PLUGGUARD_SUBNET", cfg.subnet)
         cfg.dry_run = cfg.dry_run or os.environ.get("PLUGGUARD_DRY_RUN") == "1"
         if not cfg.dry_run and not (cfg.device_id and cfg.local_key and (cfg.mac or cfg.ip)):
             raise SystemExit(

@@ -24,7 +24,7 @@ class TuyaDriver:
     located by MAC (preferred) or a last-known IP hint."""
 
     def __init__(self, device_id: str, local_key: str, ip: str = "", mac: str = "",
-                 version: str = "3.3"):
+                 subnet: str = "", version: str = "3.3"):
         import tinytuya  # imported lazily so FakeDriver users need no dep
 
         self._tinytuya = tinytuya
@@ -32,6 +32,7 @@ class TuyaDriver:
         self._local_key = local_key
         self._ip_hint = ip
         self._mac = mac
+        self._subnet = subnet
         self._version = float(version)
         self.ip = self._locate()
         self._device = self._connect()
@@ -40,7 +41,8 @@ class TuyaDriver:
         from .discover import resolve_ip
 
         if self._mac:
-            found = resolve_ip(self._mac, hint_ip=self._ip_hint or None)
+            found = resolve_ip(self._mac, hint_ip=self._ip_hint or None,
+                               subnet_prefix=self._subnet or None)
             if found:
                 log.info("Plug located at %s (MAC %s)", found, self._mac)
                 return found
@@ -125,4 +127,5 @@ class FakeDriver:
 def build_driver(cfg) -> PlugDriver:
     if cfg.dry_run:
         return FakeDriver()
-    return TuyaDriver(cfg.device_id, cfg.local_key, ip=cfg.ip, mac=cfg.mac, version=cfg.version)
+    return TuyaDriver(cfg.device_id, cfg.local_key, ip=cfg.ip, mac=cfg.mac,
+                      subnet=cfg.subnet, version=cfg.version)
