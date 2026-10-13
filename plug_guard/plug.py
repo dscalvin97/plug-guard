@@ -124,8 +124,115 @@ class FakeDriver:
         return self._state
 
 
+class InteropDriver:
+    """Hybrid driver for WSL when the plug sits on the Windows Mobile Hotspot.
+
+    WSL's virtual network stack cannot reach a hotspot subnet (the hotspot's
+    virtual adapter is not mirrored into WSL), but a Windows process launched
+    via WSL interop can. So discovery stays in WSL (Windows maintains a static
+    ARP entry that tracks the plug's current IP), while the actual tinytuya
+    command is delegated to a small Windows-side Python script (plugctl.py).
+    """
+
+    def __init__(self, device_id: str, local_key: str, ip: str = "", mac: str = "",
+                 version: str = "3.3", python_path: str = "", script_path: str = ""):
+        self._device_id = device_id
+        self._local_key = local_key
+        self._mac = mac
+        self._version = version
+        self._python = python_path
+        self._script = script_path
+        self._ip_hint = ip
+        self.ip = self._locate()
+
+    def _locate(self) -> str:
+        from .discover import resolve_ip
+
+        if self._mac:
+            found = resolve_ip(self._mac, hint_ip=self._ip_hint or None)
+            if found:
+                log.info("Plug located at %s (MAC %s, via WSL ARP)", found, self._mac)
+                return found
+            if self._ip_hint:
+                log.warning("MAC scan missed plug, falling back to hint IP %s", self._ip_hint)
+                return self._ip_hint
+            raise RuntimeError(f"Plug with MAC {self._mac} not found on LAN")
+        return self._ip_hint
+
+    def _call(self, action: str) -> dict:
+        import json
+        import subprocess
+
+        req = json.dumps({
+            "action": action,
+            "device_id": self._device_id,
+            "local_key": self._local_key,
+            "ip": self.ip,
+            "version": self._version,
+        })
+        try:
+            # Linux must open the exe to spawn it (needs /mnt/c/... form), but the
+            # script arg stays Windows-style because Windows Python reads argv as
+            # Windows paths. Config stores both Windows-style; convert exe only.
+            exe = self._python
+            if len(exe) > 2 and exe[1] == ":":
+                exe = "/mnt/" + exe[0].lower() + exe[2:].replace("\\", "/")
+            res = subprocess.run(
+                [exe, self._script],
+                input=req, capture_output=True, text=True, timeout=60,
+            )
+            lines = [ln for ln in res.stdout.strip().splitlines() if ln.strip()]
+            if not lines:
+                log.warning("interop produced no output (rc=%s): %s", res.returncode, res.stderr.strip())
+                return {"ok": False, "error": f"no output, rc={res.returncode}"}
+            return json.loads(lines[-1])
+        except Exception as exc:
+            log.warning("interop call failed: %s", exc)
+            return {"ok": False, "error": str(exc)}
+
+    def _relocate(self) -> None:
+        """Re-locate the plug (hotspot DHCP may have moved it)."""
+        self.ip = self._locate()
+
+    def turn_on(self) -> bool:
+        for attempt in (1, 2):
+            r = self._call("on")
+            if r.get("ok") and r.get("on") is True:
+                return True
+            log.warning("interop turn_on not confirmed (attempt %d): %s", attempt, r.get("error"))
+            if attempt == 1:
+                try:
+                    self._relocate()
+                except RuntimeError as exc:
+                    log.error("Re-discovery failed: %s", exc)
+        return False
+
+    def turn_off(self) -> bool:
+        for attempt in (1, 2):
+            r = self._call("off")
+            if r.get("ok") and r.get("on") is False:
+                return True
+            log.warning("interop turn_off not confirmed (attempt %d): %s", attempt, r.get("error"))
+            if attempt == 1:
+                try:
+                    self._relocate()
+                except RuntimeError as exc:
+                    log.error("Re-discovery failed: %s", exc)
+        return False
+
+    def is_on(self) -> bool | None:
+        r = self._call("status")
+        if r.get("ok"):
+            return r.get("on")
+        return None
+
+
 def build_driver(cfg) -> PlugDriver:
     if cfg.dry_run:
         return FakeDriver()
+    if getattr(cfg, "interop_python", ""):
+        return InteropDriver(cfg.device_id, cfg.local_key, ip=cfg.ip, mac=cfg.mac,
+                             version=cfg.version, python_path=cfg.interop_python,
+                             script_path=cfg.interop_script)
     return TuyaDriver(cfg.device_id, cfg.local_key, ip=cfg.ip, mac=cfg.mac,
                       subnet=cfg.subnet, version=cfg.version)
