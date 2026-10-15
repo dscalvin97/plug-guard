@@ -2,6 +2,7 @@
 config.json
 devices.json
 snapshot.json
+tinytuya.json
 
 # python
 .venv/
@@ -10,8 +11,3 @@ __pycache__/
 dist/
 build/
 .pytest_cache/
-
-# tinytuya scanner artifacts
-tinytuya.json
-snapshot.json
-devices.json

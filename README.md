@@ -81,7 +81,9 @@ Open **http://localhost:8000** in a browser, then:
 > **On the key format:** it's exactly **16 characters**, but they can be *any*
 > latin1 characters — letters, digits, **and symbols**. It is **not** always hex.
 > Copy it exactly as shown (use the copy button; hand-selecting often grabs
-> extra characters). A key like `aB3$xK9!mNpQ2rS1` is valid.
+> extra characters). A key like `aB3$xK9!mNpQ2rS1` is valid. Full walkthrough,
+> including what happens when re-pairing rotates the key:
+> [docs/LOCAL-KEY.md](docs/LOCAL-KEY.md).
 
 Grab the plug's **device ID** from the same screen (e.g. `bfxxxxxxxxxxxxxxxx`).
 
@@ -120,6 +122,10 @@ Create `~/.config/plug-guard/config.json` (on Windows:
 | `subnet` | Optional. Pins discovery to one `/24`, e.g. `"192.168.137"` (a hotspot) or `"192.168.1"` (home WiFi). Use this when the machine has multiple interfaces — otherwise auto-detection may sweep the wrong network. |
 | `turn_on_below` / `turn_off_above` | Battery thresholds (%). Must satisfy `0 < on < off <= 100`. |
 | `poll_interval` | Seconds between battery reads. |
+| `version` | Tuya protocol version, default `"3.3"`. |
+| `dry_run` | `true` = fake plug, never touches hardware (same as `--dry-run`). |
+| `interop_python` | Windows `python.exe` path. Setting it switches plug control to `plugctl.py` via WSL interop — only for the WSL2 + Windows Mobile Hotspot topology. See [docs/HOTSETUP.md](docs/HOTSETUP.md). |
+| `interop_script` | Windows path to `plugctl.py` (repo root), used by interop mode. |
 
 ### 5. Test it
 
@@ -182,7 +188,7 @@ Windows reboot:
 systemd=true
 ```
 (Run `wsl --shutdown` and reopen to apply.) Then set up the systemd unit as
-above, and enable linger: `loginctl enable-linger calvin`.
+above, and enable linger: `loginctl enable-linger $USER`.
 
 **Boot WSL on Windows logon** — save this as
 `C:\Users\<you>\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\plug-guard.bat`:
@@ -233,15 +239,15 @@ Requirements:
   `config.json`, or every command will fail with error 904.
 - **Set `subnet`** in `config.json` to the hotspot's subnet so discovery sweeps
   the right interface (e.g. `"192.168.137"` for the default Windows hotspot).
-- **WSL2 needs mirrored networking.** In default NAT mode, WSL sits behind a
-  virtual switch with **no route** to the Windows hotspot interface — the plug
-  is unreachable even though Windows itself can see it. Add to
-  `C:\Users\<you>\.wslconfig`:
-  ```ini
-  [wsl2]
-  networkingMode=mirrored
-  ```
-  then `wsl --shutdown` and reopen. On native Windows/Linux this doesn't apply.
+- **Running plug-guard in WSL2? Use interop mode.** WSL2 cannot reach the
+  hotspot subnet — not even with `networkingMode=mirrored` in
+  `.wslconfig`, which mirrors *physical* adapters only, never the hotspot's
+  virtual adapter. Set `interop_python` (Windows Python with tinytuya
+  installed) and `interop_script` (Windows path to `plugctl.py`) in
+  `config.json`: WSL keeps running the automation, but each tinytuya command
+  is executed by `plugctl.py` as a Windows process spawned via WSL interop.
+  Full walkthrough: [docs/HOTSETUP.md](docs/HOTSETUP.md). Native Windows and
+  native Linux can reach the hotspot directly — no interop needed.
 
 Note: if the controller *is* the laptop being charged, the automation only runs
 while that laptop is awake. It recovers after reboot (hotspot returns, plug
@@ -265,6 +271,9 @@ All fields are optional; env vars override the file.
 | `PLUGGUARD_MAC` | `mac` |
 | `PLUGGUARD_IP` | `ip` |
 | `PLUGGUARD_DRY_RUN=1` | `dry_run` (fake plug, no hardware) |
+| `PLUGGUARD_SUBNET` | `subnet` |
+| `PLUGGUARD_INTEROP_PYTHON` | `interop_python` |
+| `PLUGGUARD_INTEROP_SCRIPT` | `interop_script` |
 
 ## Development
 
@@ -277,6 +286,8 @@ The controller is a pure function of `(battery snapshot, thresholds)` — tests
 cover hysteresis, edge thresholds, and unknown-percent handling without touching
 hardware. `tests/test_battery.py` runs sysfs parsing against a fake tree;
 `tests/test_discover.py` parses real `arp -a` / `ip neigh` output formats.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup and PR expectations, and
+[ARCHITECTURE.md](ARCHITECTURE.md) for how the modules fit together.
 
 ## Safety notes
 

@@ -8,7 +8,7 @@ actual tinytuya command and prints a JSON result.
 
 Reads a JSON request on stdin (keeps the local_key out of argv / process lists):
     {"action": "on"|"off"|"status", "device_id": "...", "local_key": "...",
-     "ip": "192.168.137.63", "version": "3.3"}
+     "ip": "192.168.1.50", "version": "3.3"}
 Prints one JSON line:
     {"ok": true, "on": true}   or   {"ok": false, "error": "..."}
 """
