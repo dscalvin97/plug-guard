@@ -5,7 +5,7 @@ Thanks for helping. plug-guard is small on purpose — keep it that way.
 ## Dev setup
 
 ```sh
-git clone <this-repo-url> plug-guard
+git clone https://github.com/dscalvin97/plug-guard.git
 cd plug-guard
 python3 -m venv .venv
 .venv/bin/pip install -e ".[dev]"     # Windows: .venv\Scripts\pip install -e ".[dev]"

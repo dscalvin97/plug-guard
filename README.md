@@ -90,7 +90,7 @@ Grab the plug's **device ID** from the same screen (e.g. `bfxxxxxxxxxxxxxxxx`).
 ### 3. Install plug-guard
 
 ```sh
-git clone <this-repo-url> plug-guard
+git clone https://github.com/dscalvin97/plug-guard.git
 cd plug-guard
 # Linux: python3 -m venv .venv && .venv/bin/pip install -e .
 # Windows: python -m venv .venv && .venv/Scripts/pip install -e .
