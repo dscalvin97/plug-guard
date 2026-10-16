@@ -27,17 +27,13 @@ class BatteryState:
     ac_online: bool  # external power present
     status: str  # raw status string, e.g. "Discharging", "Full"
 
-    @property
-    def low(self) -> bool:
-        return not self.ac_online
-
 
 def read_sysfs(root: Path = SYSFS_POWER_SUPPLY) -> BatteryState | None:
     """Read battery state from sysfs. Returns None if no battery found."""
     if not root.is_dir():
         return None
 
-    bat: Path | None = None
+    batteries: list[Path] = []
     ac_online = False
     for entry in sorted(root.iterdir()):
         type_file = entry / "type"
@@ -47,28 +43,37 @@ def read_sysfs(root: Path = SYSFS_POWER_SUPPLY) -> BatteryState | None:
             dev_type = type_file.read_text().strip()
         except OSError:
             continue
-        if dev_type == "Battery" and bat is None:
-            bat = entry
+        if dev_type == "Battery":
+            batteries.append(entry)
         elif dev_type == "Mains":
             try:
                 ac_online = (entry / "online").read_text().strip() == "1"
             except OSError:
                 pass
 
-    if bat is None:
+    if not batteries:
         return None
 
-    def _read(name: str) -> str | None:
+    def _read(bat: Path, name: str) -> str | None:
         try:
             return (bat / name).read_text().strip()
         except OSError:
             return None
 
-    status = _read("status") or "Unknown"
-    capacity_raw = _read("capacity")
-    percent = int(capacity_raw) if capacity_raw and capacity_raw.isdigit() else None
+    # A machine may expose several batteries (two cells of one pack, or two
+    # swappable packs). The lowest charge is the honest "needs charge" signal —
+    # reading only the first would miss a drained battery and never turn on.
+    # Treat an unknown percent as lowest so it hedges toward holding.
+    def _pct(bat: Path) -> int:
+        raw = _read(bat, "capacity")
+        return int(raw) if raw and raw.isdigit() else -1
 
-    charging = status == "Charging"
+    governing = min(batteries, key=_pct)
+    capacity_raw = _read(governing, "capacity")
+    percent = int(capacity_raw) if capacity_raw and capacity_raw.isdigit() else None
+    status = _read(governing, "status") or "Unknown"
+
+    charging = any(_read(b, "status") == "Charging" for b in batteries)
     # Some systems report status without a real AC flag; trust AC flag primarily.
     if status == "Discharging":
         ac_online = False

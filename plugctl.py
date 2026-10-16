@@ -46,7 +46,8 @@ def main() -> int:
         time.sleep(0.4)
         status = dev.status()
         dps = status.get("dps", {}) if isinstance(status, dict) else {}
-        raw = dps.get("1")
+        # single-switch plugs use dps "1"; power strips use "switch_1" style codes
+        raw = dps.get("1", dps.get("switch_1"))
         on = bool(raw) if raw is not None else None
         print(json.dumps({"ok": True, "ip": ip, "on": on}))
         return 0

@@ -135,10 +135,12 @@ class InteropDriver:
     """
 
     def __init__(self, device_id: str, local_key: str, ip: str = "", mac: str = "",
-                 version: str = "3.3", python_path: str = "", script_path: str = ""):
+                 subnet: str = "", version: str = "3.3", python_path: str = "",
+                 script_path: str = ""):
         self._device_id = device_id
         self._local_key = local_key
         self._mac = mac
+        self._subnet = subnet
         self._version = version
         self._python = python_path
         self._script = script_path
@@ -149,7 +151,8 @@ class InteropDriver:
         from .discover import resolve_ip
 
         if self._mac:
-            found = resolve_ip(self._mac, hint_ip=self._ip_hint or None)
+            found = resolve_ip(self._mac, hint_ip=self._ip_hint or None,
+                               subnet_prefix=self._subnet or None)
             if found:
                 log.info("Plug located at %s (MAC %s, via WSL ARP)", found, self._mac)
                 return found
@@ -177,9 +180,11 @@ class InteropDriver:
             exe = self._python
             if len(exe) > 2 and exe[1] == ":":
                 exe = "/mnt/" + exe[0].lower() + exe[2:].replace("\\", "/")
+            # plugctl.py sets an 8s tinytuya socket timeout, so a healthy call
+            # returns well inside this; keep headroom but don't stall the tick.
             res = subprocess.run(
                 [exe, self._script],
-                input=req, capture_output=True, text=True, timeout=60,
+                input=req, capture_output=True, text=True, timeout=20,
             )
             lines = [ln for ln in res.stdout.strip().splitlines() if ln.strip()]
             if not lines:
@@ -194,12 +199,13 @@ class InteropDriver:
         """Re-locate the plug (hotspot DHCP may have moved it)."""
         self.ip = self._locate()
 
-    def turn_on(self) -> bool:
+    def _set(self, on: bool) -> bool:
         for attempt in (1, 2):
-            r = self._call("on")
-            if r.get("ok") and r.get("on") is True:
+            r = self._call("on" if on else "off")
+            if r.get("ok") and r.get("on") is on:
                 return True
-            log.warning("interop turn_on not confirmed (attempt %d): %s", attempt, r.get("error"))
+            log.warning("interop turn_%s not confirmed (attempt %d): %s",
+                        "on" if on else "off", attempt, r.get("error"))
             if attempt == 1:
                 try:
                     self._relocate()
@@ -207,18 +213,11 @@ class InteropDriver:
                     log.error("Re-discovery failed: %s", exc)
         return False
 
+    def turn_on(self) -> bool:
+        return self._set(True)
+
     def turn_off(self) -> bool:
-        for attempt in (1, 2):
-            r = self._call("off")
-            if r.get("ok") and r.get("on") is False:
-                return True
-            log.warning("interop turn_off not confirmed (attempt %d): %s", attempt, r.get("error"))
-            if attempt == 1:
-                try:
-                    self._relocate()
-                except RuntimeError as exc:
-                    log.error("Re-discovery failed: %s", exc)
-        return False
+        return self._set(False)
 
     def is_on(self) -> bool | None:
         r = self._call("status")
@@ -232,7 +231,8 @@ def build_driver(cfg) -> PlugDriver:
         return FakeDriver()
     if getattr(cfg, "interop_python", ""):
         return InteropDriver(cfg.device_id, cfg.local_key, ip=cfg.ip, mac=cfg.mac,
-                             version=cfg.version, python_path=cfg.interop_python,
+                             subnet=cfg.subnet, version=cfg.version,
+                             python_path=cfg.interop_python,
                              script_path=cfg.interop_script)
     return TuyaDriver(cfg.device_id, cfg.local_key, ip=cfg.ip, mac=cfg.mac,
                       subnet=cfg.subnet, version=cfg.version)

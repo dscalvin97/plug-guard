@@ -37,3 +37,42 @@ def test_no_battery_returns_none(tmp_path):
 
 def test_missing_dir_returns_none(tmp_path):
     assert read_sysfs(tmp_path / "nope") is None
+
+
+def make_two_batteries(tmp, cap0, status0, cap1, status1, ac_online="0"):
+    root = tmp / "ps"
+    root.mkdir()
+    for name, cap, status in (("BAT0", cap0, status0), ("BAT1", cap1, status1)):
+        if cap is None:
+            continue
+        bat = root / name
+        bat.mkdir()
+        write(bat / "type", "Battery")
+        write(bat / "status", status)
+        write(bat / "capacity", cap)
+    ac = root / "AC0"
+    ac.mkdir()
+    write(ac / "type", "Mains")
+    write(ac / "online", ac_online)
+    return root
+
+
+def test_multi_battery_picks_lowest(tmp_path):
+    # BAT0 says 55% charging, BAT1 says 10% discharging -> the drained pack is
+    # the honest "needs charge" signal, so 10% must win or the plug never turns on.
+    s = read_sysfs(make_two_batteries(tmp_path, "55", "Charging", "10", "Discharging"))
+    assert s.percent == 10
+    assert s.status == "Discharging"
+
+
+def test_multi_battery_charging_if_any_charging(tmp_path):
+    # charging is true if ANY pack reports Charging
+    s = read_sysfs(make_two_batteries(tmp_path, "10", "Discharging", "55", "Charging"))
+    assert s.percent == 10
+    assert s.charging is True
+
+
+def test_multi_battery_ignores_missing_capacity_file(tmp_path):
+    # a BAT entry without a readable capacity must not crash the read
+    s = read_sysfs(make_two_batteries(tmp_path, None, None, "42", "Discharging"))
+    assert s.percent == 42

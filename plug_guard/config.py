@@ -30,7 +30,14 @@ class Config:
     def load(cls, path: Path = CONFIG_PATH) -> "Config":
         cfg = cls()
         if path.is_file():
-            data = json.loads(path.read_text())
+            try:
+                data = json.loads(path.read_text())
+            except json.JSONDecodeError as exc:
+                raise SystemExit(
+                    f"{path} is not valid JSON ({exc}). Fix the file and retry."
+                )
+            if not isinstance(data, dict):
+                raise SystemExit(f"{path} must contain a JSON object, not {type(data).__name__}.")
             for key, value in data.items():
                 if hasattr(cfg, key):
                     setattr(cfg, key, value)
@@ -43,6 +50,12 @@ class Config:
         cfg.interop_python = os.environ.get("PLUGGUARD_INTEROP_PYTHON", cfg.interop_python)
         cfg.interop_script = os.environ.get("PLUGGUARD_INTEROP_SCRIPT", cfg.interop_script)
         cfg.dry_run = cfg.dry_run or os.environ.get("PLUGGUARD_DRY_RUN") == "1"
+        # Coerce poll_interval: a string or 0/negative here would busy-loop the
+        # wait() in the run loops (Event.wait(0) returns immediately).
+        try:
+            cfg.poll_interval = max(1, int(cfg.poll_interval))
+        except (TypeError, ValueError):
+            raise SystemExit(f"poll_interval must be an integer >= 1 second, got {cfg.poll_interval!r}.")
         if not cfg.dry_run and not (cfg.device_id and cfg.local_key and (cfg.mac or cfg.ip)):
             raise SystemExit(
                 f"Missing plug config. Fill in {path} (device_id, local_key, and mac "
